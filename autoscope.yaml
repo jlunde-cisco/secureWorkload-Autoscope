@@ -1,0 +1,154 @@
+---
+- name: Add Scopes to Tetration
+  hosts: localhost
+  connection: local
+  roles:
+    - role: ansible-module
+
+  tasks:
+    - name: Setting the auth info - remove later
+      set_fact:
+        provider_info:
+          api_key: "{{ lookup('env', 'TETRATION_API_KEY') }}"
+          api_secret: "{{ lookup('env', 'TETRATION_API_SECRET') }}"
+          server_endpoint: "{{ lookup('env', 'TETRATION_SERVER_ENDPOINT') }}"
+      no_log: True
+
+    - name: Setting the tenant name
+      set_fact:
+        tenant: "{{ lookup('env', 'TENANT') }}"
+      no_log: True
+
+    - name: Search for objects by fully qualified name
+      tetration_scope_query:
+        fully_qualified_name: "{{ tenant }}"
+        provider: "{{ provider_info }}"
+      register: tenantId
+
+    - name: Set ID for baseDN
+      set_fact:
+        baseid: "{{ tenantId.object.id }}"
+
+    - name: Adding the Internal scope
+      tetration_scope:
+        short_name: Internal
+        parent_app_scope_id: "{{ baseid }}"
+        description: Internal
+        query_multiple:
+          filters:
+            - field: ip
+              type: subnet
+              value: 10.0.0.0/8
+            - field: ip
+              type: subnet
+              value: 172.16.0.0/12
+            - field: ip
+              type: subnet
+              value: 192.168.0.0/16
+          type: or
+        state: present
+        provider: "{{ provider_info }}"
+      register: customerID
+
+    - name: Adding Internet Scope
+      tetration_rest:
+        provider: "{{ provider_info }}"
+        route: app_scopes
+        method: post
+        payload:
+          short_name: Internet
+          description: Internet
+          short_query:
+            type: not
+            filter:
+              type: or
+              filters:
+                - field: ip
+                  type: subnet
+                  value: 192.168.0.0/16
+                - field: ip
+                  type: subnet
+                  value: 10.0.0.0/8
+                - field: ip
+                  type: subnet
+                  value: 172.16.0.0/12
+          parent_app_scope_id: 6116af54497d4f560054b420
+
+    - name: Add On-Prem scope
+      tetration_scope:
+        short_name: onprem
+        parent_app_scope_id: "{{ customerID.object.id }}"
+        description: onprem
+        query_single:
+          field: user_location
+          type: eq
+          value: onprem
+        state: present
+        provider: "{{ provider_info }}"
+      register: onpremID
+
+    - name: Add Shared services scope
+      tetration_scope:
+        short_name: Shared Services
+        parent_app_scope_id: "{{ customerID.object.id }}"
+        description: Shared Services
+        query_single:
+          field: user_location
+          type: eq
+          value: shared
+        state: present
+        provider: "{{ provider_info }}"
+      register: sharedID
+
+    - name: Add Multi-Cloud scope
+      tetration_scope:
+        short_name: MultiCloud
+        parent_app_scope_id: "{{ customerID.object.id }}"
+        description: Applications not all in a single location
+        query_single:
+          field: user_location
+          type: eq
+          value: multicloud
+        state: present
+        provider: "{{ provider_info }}"
+      register: multiID
+
+    - name: Add Cloud scope
+      tetration_scope:
+        short_name: Cloud
+        parent_app_scope_id: "{{ customerID.object.id }}"
+        description: Cloud Applications
+        query_single:
+          field: user_location
+          type: eq
+          value: cloud
+        state: present
+        provider: "{{ provider_info }}"
+      register: cloudID
+
+    - name: Add Prod scope
+      tetration_scope:
+        short_name: Prod
+        parent_app_scope_id: "{{ onpremID.object.id }}"
+        description: Prod Applications
+        query_single:
+          field: user_location
+          type: eq
+          value: prod
+        state: present
+        provider: "{{ provider_info }}"
+      register: prodID
+
+    - name: Add non-Prod scope
+      tetration_scope:
+        short_name: non-Prod
+        parent_app_scope_id: "{{ onpremID.object.id }}"
+        description: non-Prod Applications
+        query_single:
+          field: user_location
+          type: eq
+          value: non-prod
+        state: present
+        provider: "{{ provider_info }}"
+      register: nonprodID
+
