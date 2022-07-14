@@ -72,7 +72,7 @@
                 - field: ip
                   type: subnet
                   value: 172.16.0.0/12
-          parent_app_scope_id: 6116af54497d4f560054b420
+          parent_app_scope_id: "{{ baseid }}"
 
     - name: Add On-Prem scope
       tetration_scope:
